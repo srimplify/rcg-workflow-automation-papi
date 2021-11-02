@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:issue-api="http://www.mulesoft.org/schema/mule/issue-api" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:anypoint-mq="http://www.mulesoft.org/schema/mule/anypoint-mq" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:game-title-api="http://www.mulesoft.org/schema/mule/game-title-api" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:slack-notification-api="http://www.mulesoft.org/schema/mule/slack-notification-api" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd  http://www.mulesoft.org/schema/mule/anypoint-mq http://www.mulesoft.org/schema/mule/anypoint-mq/current/mule-anypoint-mq.xsd http://www.mulesoft.org/schema/mule/game-title-api http://www.mulesoft.org/schema/mule/game-title-api/current/mule-game-title-api.xsd http://www.mulesoft.org/schema/mule/slack-notification-api http://www.mulesoft.org/schema/mule/slack-notification-api/current/mule-slack-notification-api.xsd
+http://www.mulesoft.org/schema/mule/issue-api http://www.mulesoft.org/schema/mule/issue-api/current/mule-issue-api.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+    <http:listener-config name="title-process-automation-api-httpListenerConfig">
+        <http:listener-connection host="0.0.0.0" port="8081" />
+    </http:listener-config>
+    <apikit:config name="title-process-automation-api-config" api="title-process-automation-api.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <anypoint-mq:config name="Anypoint_MQ_Config" doc:name="Anypoint MQ Config" doc:id="fcf34493-d917-4cc1-9147-30b8f930819f">
+        <anypoint-mq:connection clientId="${mq.client_id}" clientSecret="${mq.client_secret}" url="${mq.url}"/>
+    </anypoint-mq:config>
+	
+    <game-title-api:config name="Game_Title_API_Config" doc:name="Game Title API Config" doc:id="3eeffdde-e332-4c4f-9535-a468149f1a3e" property_host="${api.sf_custom_obj_systemapi_endpoint_host}" property_port="80" property_protocol="HTTP" property_basePath="/api" />
+    <slack-notification-api:config name="Slack_Notification_API_Config" doc:name="Slack Notification API Config" doc:id="a9491b42-5eee-42b7-933b-389b5cc988bf" property_host="${api.slack_systemapi_endpoint_host}" property_port="80" property_protocol="HTTP" property_basePath="/api" />
+    <issue-api:config name="Issue_API_Config" doc:name="Issue API Config" doc:id="b53fd464-6132-429b-b44c-e9550713a6aa" property_host="${api.jira_issue_systemapi_endpoint_host}" property_port="80" property_protocol="HTTP" property_basePath="/api" />
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="b7dbcc2f-7f0a-4d25-a8cc-5e7c6730fa82" >
+		<salesforce:basic-connection username="${sf.user}" password="${sf.password}" securityToken="${sf.security_token}"/>
+	</salesforce:sfdc-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="38301fa1-806f-4ab4-8896-5bdcedf04fb4" doc:description="config.yaml" file="config.yaml" />
+	<flow name="title-process-automation-api-main">
+        <http:listener config-ref="title-process-automation-api-httpListenerConfig" path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="title-process-automation-api-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Bad request"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="title-process-automation-api-console">
+        <http:listener config-ref="title-process-automation-api-httpListenerConfig" path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="title-process-automation-api-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="get:\title\retrieve:title-process-automation-api-config">
+        <logger level="INFO" message="get:\title\retrieve:title-process-automation-api-config" />
+        <game-title-api:get-retrieves doc:name="Retrieve titles from Salesforce" doc:id="02669c6b-7442-4921-9c5c-dba8eca7f68c" config-ref="Game_Title_API_Config" />
+    </flow>
+    <flow name="post:\title\process:application\json:title-process-automation-api-config">
+        <logger level="INFO" message="post:\title\process:application\json:title-process-automation-api-config" />
+    </flow>
+	<flow name="get:\title\retrieve\(ID):title-process-automation-api-config">
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core">
+            <ee:variables>
+                <ee:set-variable variableName="ID">attributes.uriParams.'ID'</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <logger level="INFO" message="get:\title\retrieve\(ID):title-process-automation-api-config" />
+		<game-title-api:get-retrieve-by-id doc:name="Get retrieve by id" doc:id="8ab56b03-efe9-4fac-b299-aa39f80c49b0" config-ref="Game_Title_API_Config" id="#[vars.ID]" />
+    </flow>
+	<flow name="title-process-automation-apiFlow1" doc:id="3e275aba-ade0-42d3-b79f-ed7d52b90da6" >
+		<salesforce:subscribe-channel-listener doc:name="Subscribe channel listener" doc:id="1eec23bc-186b-479f-878a-1f88eeb613d5" config-ref="Salesforce_Config" streamingChannel="/data/Game__ChangeEvent"/>
+		<ee:transform doc:name="Transform Message" doc:id="3435c4eb-c5b1-421a-bcf5-dada92e69922" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="9de9b7cd-a465-44ef-a2d5-d92239f8ee11" message='#[payload["data"]["payload"]["ChangeEventHeader"]["recordIds"][0]]'/>
+		<game-title-api:get-query-by-id doc:name="Get query Title in SF by id" doc:id="66d6cc26-ad90-45b9-98cf-865a9dcfb3cf" config-ref="Game_Title_API_Config" id='#[payload["data"]["payload"]["ChangeEventHeader"]["recordIds"][0]]'/>
+		<logger level="INFO" doc:name="Logger" doc:id="9cdac83d-83d7-4dea-b40f-7e420b6289e8" message="#[payload]"/>
+		<ee:transform doc:name="Transform Message" doc:id="50e8b26a-3ad5-46e2-a671-8cd9a9c3c386" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "data": {
+    "name": payload.Name,
+    "title_id": payload.Title_ID__c,
+    "release_date": payload.Release_Date__c,
+    "platform": payload.Platform__c,
+    "publishers": payload.Publishers__c,
+    "developers": payload.Developers__c,
+    "status": payload.Status__c,
+    "jira_id": payload.Jira_ID__c      
+    }
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="b2fd9543-6463-4646-abaa-2e05b6fba96c" message="#[payload]"/>
+		<issue-api:update-issue-by-id doc:name="Update issue by id" doc:id="ed0f8bf8-47a9-43ef-b57e-365fa486f0ae" config-ref="Issue_API_Config" id="#[payload.data.jira_id]"/>
+	</flow>
+	<flow name="title-process-automation-CREATE" doc:id="a5983a72-5db0-4f27-aed7-de06495bcdcb" >
+		<anypoint-mq:subscriber doc:name="Copy_of_Subscriber" doc:id="e3687ad4-317a-40b5-b084-040df29c1526" config-ref="Anypoint_MQ_Config" destination="title-create-queue" acknowledgementMode="IMMEDIATE" />
+		<flow-ref doc:name="Call create" doc:id="7f67309a-4aa6-491b-a056-f52a7e470579" name="create-sub-flow" />
+	</flow>
+	<flow name="title-process-automation-ERROR" doc:id="d3ad68f7-06ad-494d-a714-527c3251a963">
+		<anypoint-mq:subscriber doc:name="Subscriber" doc:id="7766b05d-9d07-4b65-a33f-74cdf624f93c" config-ref="Anypoint_MQ_Config" destination="title-create-error-queue" acknowledgementMode="IMMEDIATE" />
+		<logger level="INFO" doc:name="Logger" doc:id="f2cac1de-4f97-4fe4-9b38-50613e962496" message="RETRYING..........." />
+		<flow-ref doc:name="Call create" doc:id="9f9631f0-5fa7-449a-b2f3-085ab51f74e1" name="create-sub-flow" />
+	</flow>
+	<flow name="create-sub-flow" doc:id="5040a7c2-b836-4643-b3cf-3042ca945bf0" >
+		<set-variable value="#[payload]" doc:name="Set Variable" doc:id="e367852a-dcfd-4e8c-8c2f-93aacc115ebc" variableName="in_NewTitle" />
+		<logger level="INFO" doc:name="Logger" doc:id="953ae6ab-6875-4caf-ab4e-d7317fa83ee2" message="#[payload]" />
+		<game-title-api:create-create doc:name="Create title" doc:id="46e54a43-1ef6-46cf-bf32-ff964e56a3cf" config-ref="Game_Title_API_Config" />
+		<slack-notification-api:create-create doc:name="Slack notify" doc:id="e8de452c-6cdb-413f-8f41-f41e5d76fdb8" config-ref="Slack_Notification_API_Config">
+			<slack-notification-api:create-create-request-data><![CDATA[#[vars.in_NewTitle]]]></slack-notification-api:create-create-request-data>
+		</slack-notification-api:create-create>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="d0dccca1-8be0-44e8-b003-8ed31fa84e8b" >
+				<logger level="INFO" doc:name="Logger" doc:id="dee726f8-74dd-4fec-aa0b-bc6f19654b51" message="INSIDE ERR HANDLER" />
+				<anypoint-mq:publish doc:name="Publish" doc:id="de676879-5f22-4ea8-ad53-951112bdfd33" config-ref="Anypoint_MQ_Config" destination="title-create-error-queue" />
+				<set-payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{ "error_message" : "Salesforce is system down. We received your order and we send order confirmation soon!" }]' doc:name="Set Payload" doc:id="8964660c-fc1c-457b-a70f-e472c6ba40d5" />
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	<flow name="title-process-automation-apiFlow-UPDATE" doc:id="b865cf54-9a2b-443d-9bbb-3cf23dee594c">
+        <anypoint-mq:subscriber doc:name="Subscriber" doc:id="f6ed2b37-c286-4b3f-8a84-5ffc621b3669" config-ref="Anypoint_MQ_Config" destination="title-update-queue" acknowledgementMode="IMMEDIATE"/>
+        <set-variable value="#[payload]" doc:name="Set Variable" doc:id="1566f066-37cc-4f25-8e83-857cb38deb95" variableName="in_Title" />
+		<logger level="INFO" doc:name="Logger" doc:id="2809c4cc-6e56-4679-a390-09a697bcddb8" message="#[vars.in_Title]"/>
+		<choice doc:name="Choice" doc:id="b8716176-7695-4e35-8cbd-a5cd6addfc12">
+			<when expression='#[vars.in_Title.data.jira_id as String == ""]'>
+				<issue-api:create-issue doc:name="Create issue" doc:id="50e67083-b34a-4106-b49a-2fde9bb3be00" config-ref="Issue_API_Config" />
+				<logger level="INFO" doc:name="Logger" doc:id="9ecaf527-526c-4a6d-8702-02e1f8958d85" message="#[payload]"/>
+				<ee:transform doc:name="Transform Message" doc:id="47d8f2de-7f62-479a-9367-f5f036334669" >
+					<ee:message >
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="in_Title" ><![CDATA[%dw 2.0
+output application/json
+---
+"data":vars.in_Title.data -- ["jira_id"] ++ {"jira_id": payload.key}]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="553633fb-26bd-43d6-9092-52025e5153e4" message="INSDIE DEFAULT......."/>
+				<issue-api:update-issue-by-id doc:name="Update issue by id" doc:id="50c8547a-d384-49cd-9e5f-801696543823" config-ref="Issue_API_Config" id="#[vars.in_Title.data.jira_id]" />
+			</otherwise>
+		</choice>
+		<logger level="INFO" doc:name="Logger" doc:id="c3b7013f-8a61-4310-a6fc-33d13bb389db" message="#[vars.in_Title]"/>
+		<game-title-api:create-create doc:name="Create title in Salesforce" doc:id="012c4b23-751f-4d62-bc12-cb14ce05b5b6" config-ref="Game_Title_API_Config">
+            <game-title-api:create-create-request-data><![CDATA[#[vars.in_Title]]]></game-title-api:create-create-request-data>
+        </game-title-api:create-create>
+        <slack-notification-api:create-update doc:name="Slack Notification" doc:id="941d16de-9b64-44da-af6d-cea86e034b8e" config-ref="Slack_Notification_API_Config">
+                            <slack-notification-api:create-update-request-data><![CDATA[#[vars.in_Title]]]></slack-notification-api:create-update-request-data>
+                        </slack-notification-api:create-update>
+    </flow>
+</mule>

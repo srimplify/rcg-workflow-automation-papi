@@ -1,0 +1,39 @@
+#%RAML 1.0
+title: Title Process Automation API
+
+
+types:
+  Title: !include exchange_modules/57f0dd2e-7c19-43c0-bdb3-31bcb6cd3037/title-data-type/1.0.1/title-data-type.raml
+
+/title:
+  /process:
+    description: Process title asynchronously
+    post:
+      body:
+        application/json:
+          type: Title
+      responses:
+          201:
+            body:
+              application/json:
+                type: any
+
+
+  /retrieve:
+    description: Retrieve titles synchronously
+    get:
+      responses:
+          200:
+            body:
+              application/json:
+                type: Title[]
+    
+    /{ID}:
+      description: Retrieve title by ID
+      displayName: Retrieve title by ID
+      get:
+        responses:
+            200:
+              body:
+                application/json:
+                  type: any

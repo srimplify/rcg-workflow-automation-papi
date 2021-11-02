@@ -1,0 +1,15 @@
+mq:
+  url:
+  client_secret:
+  client_id:
+
+api:
+  sf_custom_obj_systemapi_endpoint_host:
+  slack_systemapi_endpoint_host:
+  jira_issue_systemapi_endpoint_host:
+
+
+sf:
+  user:
+  password:
+  security_token:
